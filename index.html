@@ -18,7 +18,7 @@
 </head>
 <body>
     <h2>yeable 地端連線中心</h2>
-    <div class="model-info">目前使用模型：mannix/llama3.1-8b-abliterated:latest</div>
+    <div class="model-info">目前使用模型：maid</div>
     <div id="chat"><div class="msg ai">準備就緒！，以下均由yeable電腦計算，請開始對話。</div></div>
     
     <div class="input-group">
@@ -45,7 +45,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         // 修改為您 ollama list 顯示的完整名稱
-                        model: "mannix/llama3.1-8b-abliterated:latest", 
+                        model: "maid", 
                         prompt: text,
                         stream: false
                     })
