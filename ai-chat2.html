@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>1660 SUPER AI 控制台 (修正模型名稱)</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; display: flex; flex-direction: column; height: 90vh; }
+        #chat { flex: 1; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 10px; }
+        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; }
+        .user { background: #007bff; color: white; text-align: right; margin-left: 20%; }
+        .ai { background: #e9e9eb; color: #333; margin-right: 20%; }
+        .input-group { display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
+        button { padding: 10px 25px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        .model-info { font-size: 12px; color: #666; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <h2>AI 連線中心</h2>
+    <div class="model-info">目前使用模型：mannix/llama3.1-8b-abliterated:latest</div>
+    <div id="chat"><div class="msg ai">準備就緒！模型名稱已修正，請開始對話。</div></div>
+    
+    <div class="input-group">
+        <input type="text" id="inp" placeholder="輸入訊息..." onkeypress="if(event.key==='Enter') send()">
+        <button onclick="send()">發送</button>
+    </div>
+
+    <script>
+        // 你的最新隧道網址
+        const BASE_URL = "https://related-niagara-superintendent-advisor.trycloudflare.com";
+
+        async function send() {
+            const inp = document.getElementById('inp');
+            const text = inp.value.trim();
+            if(!text) return;
+
+            addMsg('user', text);
+            inp.value = '';
+            const aiDiv = addMsg('ai', 'AI 正在計算回應...');
+
+            try {
+                const res = await fetch(`${BASE_URL}/api/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        // 修改為您 ollama list 顯示的完整名稱
+                        model: "mannix/llama3.1-8b-abliterated:latest", 
+                        prompt: text,
+                        stream: false
+                    })
+                });
+
+                if (!res.ok) throw new Error("伺服器回應錯誤: " + res.status);
+
+                const data = await res.json();
+                aiDiv.innerText = data.response;
+            } catch (e) {
+                aiDiv.innerText = "❌ 失敗：" + e.message;
+            }
+        }
+
+        function addMsg(role, txt) {
+            const div = document.createElement('div');
+            div.className = `msg ${role}`;
+            div.innerText = txt;
+            const chat = document.getElementById('chat');
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+            return div;
+        }
+    </script>
+</body>
+</html>
