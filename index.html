@@ -3,50 +3,71 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>yeablemax 無節操AI_yeblemax</title>
+    <title>無節操AI_yeblemax</title>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; display: flex; flex-direction: column; height: 90vh; }
-        #chat { flex: 1; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 10px; }
-        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; }
-        .user { background: #007bff; color: white; text-align: right; margin-left: 20%; }
-        .ai { background: #e9e9eb; color: #333; margin-right: 20%; }
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; display: flex; flex-direction: column; height: 90vh; margin: 0; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        h2 { margin: 0; }
+        #chat { flex: 1; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; flex-direction: column; }
+        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; max-width: 80%; word-wrap: break-word; }
+        .user { background: #007bff; color: white; align-self: flex-end; text-align: left; }
+        .ai { background: #e9e9eb; color: #333; align-self: flex-start; }
         .input-group { display: flex; gap: 10px; }
         input { flex: 1; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
         button { padding: 10px 25px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
-        .model-info { font-size: 12px; color: #666; margin-bottom: 5px; }
+        .model-info { font-size: 12px; color: #666; }
+        .clear-btn { background: #6c757d; padding: 5px 10px; font-size: 12px; }
     </style>
 </head>
 <body>
-    <h2>yeable 地端連線中心</h2>
-    <div class="model-info">目前使用模型：maid</div>
-    <div id="chat"><div class="msg ai">準備就緒！，以下均由yeable電腦計算，請開始對話。</div></div>
+    <header>
+        <h2>yeable 地端連線中心</h2>
+        <button class="clear-btn" onclick="clearChat()">清除記憶</button>
+    </header>
+    
+    <div class="model-info">目前使用模型：maid </div>
+    
+    <div id="chat">
+        <div class="msg ai">準備就緒！以下均由 yeable 電腦計算，請開始對話。</div>
+    </div>
     
     <div class="input-group">
         <input type="text" id="inp" placeholder="輸入訊息..." onkeypress="if(event.key==='Enter') send()">
-        <button onclick="send()">發送</button>
+        <button onclick="send()" id="btn">發送</button>
     </div>
 
     <script>
-        // 你的最新隧道網址
+        // 最新隧道網址
         const BASE_URL = "https://related-niagara-superintendent-advisor.trycloudflare.com";
+        
+        // 對話歷史紀錄陣列
+        let chatHistory = [];
 
         async function send() {
             const inp = document.getElementById('inp');
+            const btn = document.getElementById('btn');
             const text = inp.value.trim();
             if(!text) return;
 
+            // 1. 顯示使用者訊息並禁用按鈕
             addMsg('user', text);
             inp.value = '';
-            const aiDiv = addMsg('ai', 'AI 正在計算回應...');
+            btn.disabled = true;
+
+            // 2. 將使用者訊息加入歷史紀錄
+            chatHistory.push({ role: "user", content: text });
+
+            // 3. 準備 AI 回應氣泡
+            const aiDiv = addMsg('ai', 'AI 正在思考紀錄並計算回應...');
 
             try {
-                const res = await fetch(`${BASE_URL}/api/generate`, {
+                // 4. 使用 /api/chat 介面才能傳遞 messages 陣列
+                const res = await fetch(`${BASE_URL}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        // 修改為您 ollama list 顯示的完整名稱
                         model: "maid", 
-                        prompt: text,
+                        messages: chatHistory,
                         stream: false
                     })
                 });
@@ -54,9 +75,22 @@
                 if (!res.ok) throw new Error("伺服器回應錯誤: " + res.status);
 
                 const data = await res.json();
-                aiDiv.innerText = data.response;
+                const aiReply = data.message.content;
+
+                // 5. 顯示結果並存入歷史
+                aiDiv.innerText = aiReply;
+                chatHistory.push({ role: "assistant", content: aiReply });
+
+                // 限制記憶長度，避免 1660 SUPER 負擔過重 (保留最近 12 則)
+                if (chatHistory.length > 12) {
+                    chatHistory.shift(); 
+                    chatHistory.shift();
+                }
+
             } catch (e) {
                 aiDiv.innerText = "❌ 失敗：" + e.message;
+            } finally {
+                btn.disabled = false;
             }
         }
 
@@ -68,6 +102,12 @@
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
             return div;
+        }
+
+        function clearChat() {
+            chatHistory = [];
+            const chat = document.getElementById('chat');
+            chat.innerHTML = '<div class="msg ai">記憶已清除。</div>';
         }
     </script>
 </body>
