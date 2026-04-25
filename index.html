@@ -82,7 +82,7 @@
                 chatHistory.push({ role: "assistant", content: aiReply });
 
                 // 限制記憶長度，避免 1660 SUPER 負擔過重 (保留最近 12 則)
-                if (chatHistory.length > ２０) {
+                if (chatHistory.length > 21) {
                     chatHistory.shift(); 
                     chatHistory.shift();
                 }
