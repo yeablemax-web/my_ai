@@ -2,29 +2,49 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>地端運算站_yeble</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>無審查AI_yeable</title>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; display: flex; flex-direction: column; height: 90vh; margin: 0; }
+        /* 修改：限制最大寬度為 500px 並居中，適應手機並在電腦上顯得較窄 */
+        body { 
+            font-family: sans-serif; 
+            background: #f4f7f6; 
+            padding: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            height: 95vh; 
+            margin: 0 auto; 
+            max-width: 600px; 
+        }
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        h2 { margin: 0; }
+        h2 { font-size: 1.2rem; margin: 0; }
         #chat { flex: 1; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; flex-direction: column; }
-        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; max-width: 80%; word-wrap: break-word; }
+        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; max-width: 85%; word-wrap: break-word; font-size: 1rem; }
         .user { background: #007bff; color: white; align-self: flex-end; text-align: left; }
         .ai { background: #e9e9eb; color: #333; align-self: flex-start; }
-        .input-group { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
-        button { padding: 10px 25px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
-        .model-info { font-size: 12px; color: #666; }
+        .input-group { display: flex; gap: 8px; }
+        
+        /* 修改：加大字體 (18px) 並增加內距，讓手指好點擊，並防止 iOS 自動放大 */
+        input { 
+            flex: 1; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid #ddd; 
+            font-size: 18px; 
+        }
+        
+        button { padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        .model-info { font-size: 11px; color: #666; margin-bottom: 5px; }
         .clear-btn { background: #6c757d; padding: 5px 10px; font-size: 12px; }
     </style>
 </head>
 <body>
     <header>
-        <h2>yeable －5060ti 地端運算站</h2>
+        <h2>yeable_5060ti地端運算站</h2>
         <button class="clear-btn" onclick="clearChat()">清除記憶</button>
     </header>
     
-    <div class="model-info">目前使用模型：maid（dolphin-2.9.3-mistral-nemo-12b.Q8；人格設定:女僕）</div>
+    <div class="model-info">模型：maid (dolphin-2.9.3-mistral-nemo-12b.Q8；人格設定:女僕)</div>
     
     <div id="chat">
         <div class="msg ai">準備就緒！以下均由 yeable 自家顯卡計算，請開始對話。</div>
@@ -36,10 +56,7 @@
     </div>
 
     <script>
-        // 最新隧道網址
         const BASE_URL = "https://mutual-neither-dropped-reveal.trycloudflare.com";
-        
-        // 對話歷史紀錄陣列 (只存 user 與 assistant，不含人格前綴)
         let chatHistory = [];
 
         async function send() {
@@ -48,47 +65,39 @@
             const text = inp.value.trim();
             if(!text) return;
 
-            // UI 顯示
             addMsg('user', text);
             inp.value = '';
             btn.disabled = true;
 
-            // 將使用者訊息加入歷史
             chatHistory.push({ role: "user", content: text });
-
             const aiDiv = addMsg('ai', '計算中...');
 
             try {
-                // 💡 修改處：直接傳送對話歷史，人格設定由後端 Modelfile (MF) 自動掛載
                 const res = await fetch(`${BASE_URL}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: "maid", 
-                        messages: chatHistory, // 這裡只傳送對話，F12 看不到前綴
+                        messages: chatHistory,
                         stream: false
                     })
                 });
 
-                if (!res.ok) throw new Error("伺服器回應錯誤: " + res.status);
+                if (!res.ok) throw new Error("伺服器回應錯誤");
 
                 const data = await res.json();
                 const aiReply = data.message.content;
 
-                // 更新 UI 與歷史紀錄
                 aiDiv.innerText = aiReply;
                 chatHistory.push({ role: "assistant", content: aiReply });
 
-                // 限制對話長度，避免超出顯存或 num_ctx
-                if (chatHistory.length > 20) {
-                    chatHistory.splice(0, 2); 
-                }
+                if (chatHistory.length > 20) chatHistory.splice(0, 2); 
 
             } catch (e) {
                 aiDiv.innerText = "❌ 失敗：" + e.message;
             } finally {
                 btn.disabled = false;
-                inp.focus(); // 自動對焦，方便連續輸入
+                inp.focus();
             }
         }
 
