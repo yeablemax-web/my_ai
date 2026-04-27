@@ -55,49 +55,58 @@
         <button onclick="send()" id="btn">發送</button>
     </div>
 
-    <script>
-        
-        const BASE_URL = "https://-statutory-array-assets.trycloudflare.com/chat";
-
-        
-        let chatHistory = [];
+<script>
+        /**
+         * ⚠ 重要設定：
+         * 請將下方的 BASE_URL 替換為 tunnel_gate_rag.py 產生的 https 網址。
+         * 注意：網址結尾不要加斜槓 (/)，例如：https://xyz.trycloudflare.com
+         */
+        const BASE_URL = "https://your-temporary-url.trycloudflare.com"; 
 
         async function send() {
             const inp = document.getElementById('inp');
             const btn = document.getElementById('btn');
             const text = inp.value.trim();
+            
             if(!text) return;
 
+            // 1. 顯示使用者訊息
             addMsg('user', text);
             inp.value = '';
             btn.disabled = true;
 
-            chatHistory.push({ role: "user", content: text });
-            const aiDiv = addMsg('ai', '計算中...');
+            // 2. 顯示等待狀態
+            const aiDiv = addMsg('ai', '正在檢索本地文件並思考中...');
 
             try {
-                const res = await fetch(`${BASE_URL}/api/chat`, {
+                // 3. 發送請求至本地 FastAPI (經由 Cloudflare 隧道)
+                const res = await fetch(`${BASE_URL}/chat`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: "maid", 
-                        messages: chatHistory,
-                        stream: false
+                    headers: { 
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({ 
+                        "question": text 
                     })
                 });
 
-                if (!res.ok) throw new Error("伺服器回應錯誤");
+                if (!res.ok) {
+                    throw new Error(`連線失敗 (Status: ${res.status})`);
+                }
 
                 const data = await res.json();
-                const aiReply = data.message.content;
-
-                aiDiv.innerText = aiReply;
-                chatHistory.push({ role: "assistant", content: aiReply });
-
-                if (chatHistory.length > 20) chatHistory.splice(0, 2); 
+                
+                // 4. 更新 AI 回應 (對應 FastAPI 回傳的 {"answer": "..."})
+                if (data.answer) {
+                    aiDiv.innerText = data.answer;
+                } else {
+                    aiDiv.innerText = "❌ 格式錯誤：伺服器未回傳 answer";
+                }
 
             } catch (e) {
-                aiDiv.innerText = "❌ 失敗：" + e.message;
+                console.error(e);
+                aiDiv.innerText = "❌ 錯誤：" + e.message + "。請確認本地 tunnel_gate_rag.py 是否正在運行。";
+                aiDiv.style.color = "red";
             } finally {
                 btn.disabled = false;
                 inp.focus();
@@ -110,13 +119,16 @@
             div.innerText = txt;
             const chat = document.getElementById('chat');
             chat.appendChild(div);
+            
+            // 自動滾動到底部
             chat.scrollTop = chat.scrollHeight;
             return div;
         }
 
         function clearChat() {
-            chatHistory = [];
-            document.getElementById('chat').innerHTML = '<div class="msg ai">記憶已清除。</div>';
+            if(confirm("確定要清除目前畫面上的對話嗎？")) {
+                document.getElementById('chat').innerHTML = '<div class="msg ai">對話已清除。</div>';
+            }
         }
     </script>
 </body>
