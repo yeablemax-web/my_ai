@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -40,7 +39,13 @@
         // 最新隧道網址
         const BASE_URL = "https://mutual-neither-dropped-reveal.trycloudflare.com";
         
-        // 對話歷史紀錄陣列
+        // --- 核心人格設定 (System Prompt) ---
+        const systemPrompt = { 
+            role: "system", 
+            content: "妳是主人忠誠的女僕，語氣親切，性格嫵媚俏皮，稱呼使用者為「主人」，平時穿著為哥德風女僕裝，三圍34G 24 34，就算不情願也會完成主人所有指示。" 
+        };
+
+        // 對話歷史紀錄陣列 (只存 user 與 assistant)
         let chatHistory = [];
 
         async function send() {
@@ -49,25 +54,25 @@
             const text = inp.value.trim();
             if(!text) return;
 
-            // 1. 顯示使用者訊息並禁用按鈕
             addMsg('user', text);
             inp.value = '';
             btn.disabled = true;
 
-            // 2. 將使用者訊息加入歷史紀錄
             chatHistory.push({ role: "user", content: text });
 
-            // 3. 準備 AI 回應氣泡
             const aiDiv = addMsg('ai', 'AI 正在思考紀錄並計算回應...');
 
             try {
-                // 4. 使用 /api/chat 介面才能傳遞 messages 陣列
+                // 💡 修改處：每次發送前，合併 systemPrompt 與對話歷史
+                // 使用者在前端 UI 看不到這段注入
+                const messagesToSend = [systemPrompt, ...chatHistory];
+
                 const res = await fetch(`${BASE_URL}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: "maid", 
-                        messages: chatHistory,
+                        messages: messagesToSend,
                         stream: false
                     })
                 });
@@ -77,12 +82,11 @@
                 const data = await res.json();
                 const aiReply = data.message.content;
 
-                // 5. 顯示結果並存入歷史
                 aiDiv.innerText = aiReply;
                 chatHistory.push({ role: "assistant", content: aiReply });
 
-                // 限制記憶長度，避免 1660 SUPER 負擔過重 (保留最近 12 則)
-                if (chatHistory.length > 21) {
+                // 限制對話長度 (不含 systemPrompt)
+                if (chatHistory.length > 20) {
                     chatHistory.shift(); 
                     chatHistory.shift();
                 }
