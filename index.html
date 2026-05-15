@@ -27,10 +27,15 @@
         #img-preview { max-height: 150px; border-radius: 8px; border: 2px solid #28a745; }
         .del-img { position: absolute; top: -10px; right: -10px; background: red; color: white; border-radius: 50%; width: 25px; height: 25px; border: none; cursor: pointer; font-size: 14px; font-weight: bold; }
 
+        /* 批次掃描列 */
+        .batch-group { display: flex; gap: 5px; margin-bottom: 10px; background: #fff; padding: 8px; border-radius: 8px; border: 1px dashed #6f42c1; }
+        .batch-group input { flex: 1; padding: 5px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px; }
+        .batch-btn { background: #6f42c1; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+
         .input-group { display: flex; gap: 8px; align-items: center; }
         input[type="text"] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
         button { padding: 10px 18px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 16px; }
-        .cam-btn { background: #6f42c1; } /* 紫色相機按鈕 */
+        .cam-btn { background: #6f42c1; }
         .model-info { font-size: 11px; color: #666; margin-bottom: 5px; }
         .clear-btn { background: #6c757d; padding: 5px 10px; font-size: 12px; }
     </style>
@@ -39,109 +44,121 @@
 <body>
 
 <header>
-    <h2>yeable_5060ti封閉型AI運算站Ver1.20</h2>
+    <h2>yeable_5060ti封閉型AI運算站Ver1.25</h2>
     <button class="clear-btn" onclick="clearChat()">清除記憶</button>
 </header>
 
 <div class="model-info">模型:(Qwen3-VL-8B-Thinking)</div>
 
-<div id="chat">
-    <div class="msg ai">準備就緒！已啟動視覺辨識功能。您可以上傳照片讓我看看，或是直接與我對話。</div>
+<div class="batch-group">
+    <input type="text" id="folder-path" placeholder="輸入本地資料夾絕對路徑 (例如 C:\Photos)">
+    <button class="batch-btn" onclick="scanFolder()">🚀 批次全掃</button>
 </div>
 
-<!-- 圖片預覽區 -->
+<div id="chat">
+    <div class="msg ai">主人，請輸入訊息或上傳圖片。若要處理大量文件，請在上方輸入資料夾路徑。</div>
+</div>
+
 <div id="preview-area">
     <button class="del-img" onclick="cancelImage()">×</button>
     <img id="img-preview" src="">
 </div>
 
 <div class="input-group">
-    <!-- 隱藏的檔案選擇器 -->
     <input type="file" id="file-input" accept="image/*" style="display:none;" onchange="handleFile(this)">
     <button class="cam-btn" onclick="document.getElementById('file-input').click()">📷</button>
-    
-    <input type="text" id="inp" placeholder="輸入訊息或描述照片..." onkeypress="if(event.key==='Enter') send()">
+    <input type="text" id="inp" placeholder="輸入訊息..." onkeypress="if(event.key==='Enter') send()">
     <button onclick="send()" id="btn">發送</button>
 </div>
 
 <script>
 const BASE_URL = "https://ai-test.yeablemax.org";
-let currentBase64Image = null; // 用於儲存要發送的圖片
+let currentBase64Image = null;
 
-// 處理檔案選取並顯示預覽
 function handleFile(input) {
     const file = input.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = function (e) {
-        // 顯示預覽圖
         document.getElementById('img-preview').src = e.target.result;
         document.getElementById('preview-area').style.display = 'block';
-        // 儲存純 Base64 字串 (去掉 data:image/...;base64, 開頭)
         currentBase64Image = e.target.result.split(',')[1];
     };
     reader.readAsDataURL(file);
 }
 
-// 取消上傳圖片
 function cancelImage() {
     currentBase64Image = null;
     document.getElementById('file-input').value = "";
     document.getElementById('preview-area').style.display = 'none';
-    document.getElementById('img-preview').src = "";
+}
+
+// 🚀 新增：掃描資料夾功能
+async function scanFolder() {
+    const path = document.getElementById('folder-path').value.trim();
+    if (!path) {
+        alert("主人，請先輸入有效的資料夾路徑。");
+        return;
+    }
+
+    addMsg('user', `請幫我辨識資料夾內的所有圖片：${path}`);
+    const aiDiv = addMsg('ai', '正在掃描資料夾並進行批次辨識，這可能需要一點時間...');
+
+    try {
+        const res = await fetch(`${BASE_URL}/batch_scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_path: path })
+        });
+
+        if (!res.ok) throw new Error(`批次任務啟動失敗 (${res.status})`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        aiDiv.innerText = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            aiDiv.innerText += decoder.decode(value, { stream: true });
+            document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+        }
+    } catch (e) {
+        aiDiv.innerText = "❌ 批次處理出錯：" + e.message;
+    }
 }
 
 async function send() {
     const inp = document.getElementById('inp');
     const btn = document.getElementById('btn');
     const chat = document.getElementById('chat');
-
     const text = inp.value.trim();
-    // 如果沒文字也沒圖片，就不送出
     if (!text && !currentBase64Image) return;
 
-    // 將使用者訊息加到畫面
-    addMsg('user', text + (currentBase64Image ? " [🖼️ 已傳送圖片]" : ""));
-    
-    // 備份圖片資料並立刻清空預覽區，防止連續發送
+    addMsg('user', text + (currentBase64Image ? " [🖼️ 圖片]" : ""));
     const imageToSend = currentBase64Image;
     cancelImage(); 
     inp.value = '';
     btn.disabled = true;
 
     const aiDiv = addMsg('ai', '思考中...');
-
     try {
         const res = await fetch(`${BASE_URL}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                question: text,
-                image: imageToSend // 將 Base64 圖片送往後端
-            })
+            body: JSON.stringify({ question: text, image: imageToSend })
         });
-
-        if (!res.ok) throw new Error(`連線失敗 (${res.status})`);
-
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
-
         aiDiv.innerText = "";
-
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            aiDiv.innerText += chunk;
+            aiDiv.innerText += decoder.decode(value, { stream: true });
             chat.scrollTop = chat.scrollHeight;
         }
-
     } catch (e) {
-        console.error(e);
-        aiDiv.innerText = "❌ yeable家程式錯誤：" + e.message;
-        aiDiv.style.color = "red";
+        aiDiv.innerText = "❌ 連線錯誤：" + e.message;
     } finally {
         btn.disabled = false;
         inp.focus();
@@ -159,15 +176,10 @@ function addMsg(role, txt) {
 }
 
 function clearChat() {
-    if (confirm("確定要清除目前畫面上的對話嗎？")) {
-        document.getElementById('chat').innerHTML =
-            '<div class="msg ai">對話記憶已重置，主人有什麼吩咐嗎？</div>';
-        currentBase64Image = null;
+    if (confirm("確定清除對話？")) {
+        document.getElementById('chat').innerHTML = '<div class="msg ai">對話已重置。</div>';
     }
 }
 </script>
-
 </body>
 </html>
-</html>
-
