@@ -21,9 +21,16 @@
         .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; max-width: 85%; word-wrap: break-word; font-size: 1rem; }
         .user { background: #007bff; color: white; align-self: flex-end; }
         .ai { background: #e9e9eb; color: #333; align-self: flex-start; }
-        .input-group { display: flex; gap: 8px; }
-        input { flex: 1; padding: 15px; border-radius: 8px; border: 1px solid #ddd; font-size: 18px; }
-        button { padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        
+        /* 圖片預覽區 */
+        #preview-area { display: none; position: relative; margin-bottom: 10px; align-self: flex-start; }
+        #img-preview { max-height: 150px; border-radius: 8px; border: 2px solid #28a745; }
+        .del-img { position: absolute; top: -10px; right: -10px; background: red; color: white; border-radius: 50%; width: 25px; height: 25px; border: none; cursor: pointer; font-size: 14px; font-weight: bold; }
+
+        .input-group { display: flex; gap: 8px; align-items: center; }
+        input[type="text"] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
+        button { padding: 10px 18px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        .cam-btn { background: #6f42c1; } /* 紫色相機按鈕 */
         .model-info { font-size: 11px; color: #666; margin-bottom: 5px; }
         .clear-btn { background: #6c757d; padding: 5px 10px; font-size: 12px; }
     </style>
@@ -32,24 +39,58 @@
 <body>
 
 <header>
-    <h2>yeable_5060ti封閉型AI運算站Ver1.16</h2>
+    <h2>yeable_5060ti封閉型AI運算站Ver1.20</h2>
     <button class="clear-btn" onclick="clearChat()">清除記憶</button>
 </header>
 
-<div class="model-info">模型:(mistral-12B-Q8)</div>
+<div class="model-info">模型:(Qwen3-VL-8B-Thinking)</div>
 
 <div id="chat">
-    <div class="msg ai">準備就緒！以下均由 yeable 自家顯卡計算，請開始對話。</div>
+    <div class="msg ai">準備就緒！已啟動視覺辨識功能。您可以上傳照片讓我看看，或是直接與我對話。</div>
+</div>
+
+<!-- 圖片預覽區 -->
+<div id="preview-area">
+    <button class="del-img" onclick="cancelImage()">×</button>
+    <img id="img-preview" src="">
 </div>
 
 <div class="input-group">
-    <input type="text" id="inp" placeholder="輸入訊息..." onkeypress="if(event.key==='Enter') send()">
+    <!-- 隱藏的檔案選擇器 -->
+    <input type="file" id="file-input" accept="image/*" style="display:none;" onchange="handleFile(this)">
+    <button class="cam-btn" onclick="document.getElementById('file-input').click()">📷</button>
+    
+    <input type="text" id="inp" placeholder="輸入訊息或描述照片..." onkeypress="if(event.key==='Enter') send()">
     <button onclick="send()" id="btn">發送</button>
 </div>
 
 <script>
-
 const BASE_URL = "https://ai-test.yeablemax.org";
+let currentBase64Image = null; // 用於儲存要發送的圖片
+
+// 處理檔案選取並顯示預覽
+function handleFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        // 顯示預覽圖
+        document.getElementById('img-preview').src = e.target.result;
+        document.getElementById('preview-area').style.display = 'block';
+        // 儲存純 Base64 字串 (去掉 data:image/...;base64, 開頭)
+        currentBase64Image = e.target.result.split(',')[1];
+    };
+    reader.readAsDataURL(file);
+}
+
+// 取消上傳圖片
+function cancelImage() {
+    currentBase64Image = null;
+    document.getElementById('file-input').value = "";
+    document.getElementById('preview-area').style.display = 'none';
+    document.getElementById('img-preview').src = "";
+}
 
 async function send() {
     const inp = document.getElementById('inp');
@@ -57,26 +98,32 @@ async function send() {
     const chat = document.getElementById('chat');
 
     const text = inp.value.trim();
-    if (!text) return;
+    // 如果沒文字也沒圖片，就不送出
+    if (!text && !currentBase64Image) return;
 
-    addMsg('user', text);
+    // 將使用者訊息加到畫面
+    addMsg('user', text + (currentBase64Image ? " [🖼️ 已傳送圖片]" : ""));
+    
+    // 備份圖片資料並立刻清空預覽區，防止連續發送
+    const imageToSend = currentBase64Image;
+    cancelImage(); 
     inp.value = '';
     btn.disabled = true;
 
-    const aiDiv = addMsg('ai', '思考中...');
+    const aiDiv = addMsg('ai', '主人請稍等，女僕正在思考中...');
 
     try {
         const res = await fetch(`${BASE_URL}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: text })
+            body: JSON.stringify({ 
+                question: text,
+                image: imageToSend // 將 Base64 圖片送往後端
+            })
         });
 
-        if (!res.ok) {
-            throw new Error(`連線失敗 (${res.status})`);
-        }
+        if (!res.ok) throw new Error(`連線失敗 (${res.status})`);
 
-        // 🔥 Streaming 核心
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
 
@@ -88,7 +135,6 @@ async function send() {
 
             const chunk = decoder.decode(value, { stream: true });
             aiDiv.innerText += chunk;
-
             chat.scrollTop = chat.scrollHeight;
         }
 
@@ -115,12 +161,13 @@ function addMsg(role, txt) {
 function clearChat() {
     if (confirm("確定要清除目前畫面上的對話嗎？")) {
         document.getElementById('chat').innerHTML =
-            '<div class="msg ai">對話已清除。</div>';
+            '<div class="msg ai">對話記憶已重置，主人有什麼吩咐嗎？</div>';
+        currentBase64Image = null;
     }
 }
-
 </script>
 
 </body>
+</html>
 </html>
 
