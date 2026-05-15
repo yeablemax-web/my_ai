@@ -110,7 +110,7 @@ async function send() {
     inp.value = '';
     btn.disabled = true;
 
-    const aiDiv = addMsg('ai', '主人請稍等，女僕正在思考中...');
+    const aiDiv = addMsg('ai', '思考中...');
 
     try {
         const res = await fetch(`${BASE_URL}/chat`, {
