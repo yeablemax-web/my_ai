@@ -101,7 +101,7 @@ async function scanFolder() {
         return;
     }
 
-    addMsg('user', `請幫我辨識資料夾內的所有圖片：${path}`);
+    addMsg('user', `請幫我辨識資料夾內的所有圖片：${path}，並分別標1 2 3 給我CSV檔`);
     const aiDiv = addMsg('ai', '正在掃描資料夾並進行批次辨識，這可能需要一點時間...');
 
     try {
