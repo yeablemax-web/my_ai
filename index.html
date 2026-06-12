@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>封閉型AI_yeable</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { 
             font-family: sans-serif; 
@@ -18,10 +19,35 @@
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         h2 { font-size: 1.2rem; margin: 0; }
         #chat { flex: 1; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; flex-direction: column; }
-        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; max-width: 85%; word-wrap: break-word; font-size: 1rem; }
+        
+        /* 這裡加上 white-space: pre-wrap 確保換行與空白能正確保留 */
+        .msg { margin-bottom: 10px; padding: 10px; border-radius: 10px; line-height: 1.5; max-width: 85%; word-wrap: break-word; font-size: 1rem; white-space: pre-wrap; }
         .user { background: #007bff; color: white; align-self: flex-end; }
         .ai { background: #e9e9eb; color: #333; align-self: flex-start; }
         
+        /* 針對 AI 輸出程式碼區塊的優化樣式 */
+        .msg pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 8px 0;
+        }
+        .msg code {
+            font-family: 'Courier New', Courier, monospace;
+            background: rgba(0, 0, 0, 0.06);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 0.95rem;
+        }
+        .msg pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.9rem;
+        }
+
         /* 圖片預覽區 */
         #preview-area { display: none; position: relative; margin-bottom: 10px; align-self: flex-start; }
         #img-preview { max-height: 150px; border-radius: 8px; border: 2px solid #28a745; }
@@ -32,12 +58,25 @@
         .batch-group input { flex: 1; padding: 5px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px; }
         .batch-btn { background: #6f42c1; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; }
 
-        .input-group { display: flex; gap: 8px; align-items: center; }
-        input[type="text"] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
-        button { padding: 10px 18px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        .input-group { display: flex; gap: 8px; align-items: flex-end; }
+        
+        /* 將 input 改為 textarea 的樣式優化，支援高度自動彈性伸縮 */
+        textarea#inp { 
+            flex: 1; 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 1px solid #ddd; 
+            font-size: 16px; 
+            resize: none; 
+            font-family: inherit;
+            height: 22px;
+            max-height: 150px;
+            box-sizing: content-box;
+        }
+        button { padding: 10px 18px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; font-size: 16px; height: 46px; }
         .cam-btn { background: #6f42c1; }
         .model-info { font-size: 11px; color: #666; margin-bottom: 5px; }
-        .clear-btn { background: #6c757d; padding: 5px 10px; font-size: 12px; }
+        .clear-btn { background: #6c757d; padding: 5px 10px; font-size: 12px; height: auto; }
     </style>
 </head>
 
@@ -67,13 +106,27 @@
 <div class="input-group">
     <input type="file" id="file-input" accept="image/*" style="display:none;" onchange="handleFile(this)">
     <button class="cam-btn" onclick="document.getElementById('file-input').click()">📷</button>
-    <input type="text" id="inp" placeholder="輸入訊息..." onkeypress="if(event.key==='Enter') send()">
+    <textarea id="inp" placeholder="輸入訊息..."></textarea>
     <button onclick="send()" id="btn">發送</button>
 </div>
 
 <script>
 const BASE_URL = "https://ai-test.yeablemax.org";
 let currentBase64Image = null;
+
+// 監聽鍵盤事件：實現 Enter 發送、Shift + Enter 換行
+document.getElementById('inp').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); // 阻止預設的換行行為
+        send(); // 執行發送
+    }
+});
+
+// 輸入框高度根據內容自動伸縮
+document.getElementById('inp').addEventListener('input', function() {
+    this.style.height = '22px';
+    this.style.height = (this.scrollHeight - 24) + 'px';
+});
 
 function handleFile(input) {
     const file = input.files[0];
@@ -93,7 +146,6 @@ function cancelImage() {
     document.getElementById('preview-area').style.display = 'none';
 }
 
-// 🚀 新增：掃描資料夾功能
 async function scanFolder() {
     const path = document.getElementById('folder-path').value.trim();
     if (!path) {
@@ -115,12 +167,14 @@ async function scanFolder() {
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        aiDiv.innerText = "";
+        let accumulatedText = "";
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            aiDiv.innerText += decoder.decode(value, { stream: true });
+            accumulatedText += decoder.decode(value, { stream: true });
+            // 使用 marked 解析 Markdown 語法以精確呈現程式碼與縮排
+            aiDiv.innerHTML = marked.parse(accumulatedText);
             document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
         }
     } catch (e) {
@@ -139,9 +193,12 @@ async function send() {
     const imageToSend = currentBase64Image;
     cancelImage(); 
     inp.value = '';
+    inp.style.height = '22px'; // 重設輸入框高度
     btn.disabled = true;
 
     const aiDiv = addMsg('ai', '思考中...');
+    let accumulatedText = "";
+
     try {
         const res = await fetch(`${BASE_URL}/chat`, {
             method: 'POST',
@@ -150,11 +207,13 @@ async function send() {
         });
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        aiDiv.innerText = "";
+        
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            aiDiv.innerText += decoder.decode(value, { stream: true });
+            accumulatedText += decoder.decode(value, { stream: true });
+            // 使用 marked 解析串流文本，確保縮排與程式碼語法高亮區塊正確渲染
+            aiDiv.innerHTML = marked.parse(accumulatedText);
             chat.scrollTop = chat.scrollHeight;
         }
     } catch (e) {
@@ -168,6 +227,7 @@ async function send() {
 function addMsg(role, txt) {
     const div = document.createElement('div');
     div.className = `msg ${role}`;
+    // 使用者訊息直接帶入文字（保留換行），AI 訊息初始給予狀態文字
     div.innerText = txt;
     const chat = document.getElementById('chat');
     chat.appendChild(div);
